@@ -81,7 +81,7 @@ final class DestinationField extends LinearLayout {
         boolean hasText = input.length() > 0;
         boolean raised = input.hasFocus() || hasText;
         caption.setVisibility(raised ? VISIBLE : GONE);
-        input.setHint(raised ? "输入地点或地址" : "目的地");
+        input.setHint(raised ? "地名或地址" : "目的地");
         clear.setVisibility(hasText ? VISIBLE : GONE);
         int color = invalid ? 0xffa42e21 : input.hasFocus() ? 0xff246651 : 0xff9eaea5;
         outline.setStroke(dp(invalid || input.hasFocus() ? 2 : 1), color);

@@ -137,7 +137,7 @@ public final class MainActivity extends Activity {
         mark.setImageResource(R.drawable.launcher);
         mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         body.addView(mark, dp(46), dp(46));
-        add(body, label("今天怎么出门？", 34, true), 18);
+        add(body, label("怎么出门？", 34, true), 18);
         Button transit = homeAction("查公交地铁", GREEN, -1, R.drawable.train);
         transit.setOnClickListener(v -> form("", true));
         Button taxi = homeAction("打车", GOLD, 0xff382b0d, R.drawable.taxi);
@@ -158,21 +158,25 @@ public final class MainActivity extends Activity {
         showHints = true;
         body.setGravity(Gravity.TOP);
         LinearLayout top = new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
+        boolean largeType = getResources().getConfiguration().fontScale >= 1.4f
+                && getResources().getConfiguration().screenWidthDp < 400;
+        top.setOrientation(largeType ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         add(body, top, 0);
         Button back = button("首页", PAPER, INK, 19);
         back.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.back, 0, 0, 0);
         back.setContentDescription("返回首页");
-        top.addView(back);
+        top.addView(back, -2, -2);
         back.setOnClickListener(v -> home());
         locationButton = button("使用当前位置", SOFT, INK, 18);
         locationButton.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.pin, 0, 0, 0);
         locationButton.setCompoundDrawablePadding(dp(6));
-        LinearLayout.LayoutParams locationParams = new LinearLayout.LayoutParams(0, -2, 1);
-        locationParams.leftMargin = dp(8);
+        LinearLayout.LayoutParams locationParams = largeType ? new LinearLayout.LayoutParams(-1, -2)
+                : new LinearLayout.LayoutParams(0, -2, 1);
+        if (!largeType) locationParams.leftMargin = dp(8);
         top.addView(locationButton, locationParams);
         locationButton.setOnClickListener(v -> requestFix());
-        add(body, label("你要去哪儿？", 32, true), 18);
+        add(body, label("去哪儿？", 32, true), 18);
         destinationField = new DestinationField(this);
         dest = destinationField.input;
         dest.setText(initial);
@@ -247,7 +251,7 @@ public final class MainActivity extends Activity {
         if (active && inForm) location.start();
     }
     private void cityLabel() {
-        cityButton.setText(city().isEmpty() ? "设置常用城市（可选）" : "常用城市 · " + city());
+        cityButton.setText(city().isEmpty() ? "设置常用城市" : "常用城市 · " + city());
     }
     private void editCity() {
         showHints = false;
