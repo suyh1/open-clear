@@ -91,3 +91,8 @@ for name, width, font in [("standard", 786, "1.0"), ("large", 640, "1.6")]:
     control("设置常用城市")
     tap("返回首页")
     control("查公交地铁")
+
+adb("shell", "pm", "clear", "family.chumen")
+adb("install", "-r", "RouteChecks.apk")
+report = adb("shell", "am", "instrument", "-w", "family.chumen.checks/.RouteChecks").decode()
+assert "route_checks=passed" in report, report

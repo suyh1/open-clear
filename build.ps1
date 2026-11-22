@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory=$true)][string]$BuildTools,
     [ValidateRange(1,2100000000)][int]$VersionCode = 1,
     [string]$VersionName = '1.0',
-    [string]$SigningKey
+    [string]$SigningKey,
+    [string]$ProjectRoot = $PSScriptRoot
 )
 $ErrorActionPreference = 'Stop'
 $AndroidJar = (Resolve-Path -LiteralPath $AndroidJar).Path
@@ -37,7 +38,7 @@ function Get-LocalSigningKey {
     return $key
 }
 
-Push-Location $PSScriptRoot
+Push-Location $ProjectRoot
 try {
     Run "$BuildTools/aapt2.exe" @('compile','--dir','res','-o',"$build/res.zip")
     Run "$BuildTools/aapt2.exe" @('link','-I',$AndroidJar,'--manifest','AndroidManifest.xml','--version-code',"$VersionCode",'--version-name',$VersionName,'--java',$generated,'-o',"$build/base.apk","$build/res.zip")

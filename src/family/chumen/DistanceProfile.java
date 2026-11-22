@@ -13,7 +13,7 @@ final class DistanceProfile extends LinearLayout {
     private final List<Places.Place> places;
     private final int[] meters;
     private final TextView name;
-    private final TextSwitcher meter;
+    private final MeterCounter meter;
     private final Plot plot;
     private int selected = -1;
     private int max = 1;
@@ -33,12 +33,7 @@ final class DistanceProfile extends LinearLayout {
         name = new TextView(c);
         name.setTextSize(20); name.setTextColor(0xff244c3d);
         addView(name);
-        meter = new TextSwitcher(c);
-        meter.setFactory(() -> {
-            TextView n = new TextView(c);
-            n.setTextSize(26); n.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-            n.setTextColor(0xff194f41); return n;
-        });
+        meter = new MeterCounter(c);
         addView(meter);
         plot = new Plot(c);
         addView(plot,-1,MotionUi.dp(this,100));
@@ -47,22 +42,56 @@ final class DistanceProfile extends LinearLayout {
     int index() { return selected; }
     private void select(int index) {
         if (index==selected) return;
-        boolean forward = index > selected;
-        if (selected>=0 && MotionUi.enabled(this)) {
-            meter.setInAnimation(rolling(forward ? 1 : -1,0));
-            meter.setOutAnimation(rolling(0,forward ? -1 : 1));
-        }
+        boolean animate = selected >= 0 && MotionUi.enabled(this);
         selected = index;
         name.setText(places.get(index).name);
-        meter.setText(meters[index] + " 米");
+        meter.setMeters(meters[index],animate);
         plot.setContentDescription("第" + (index+1) + "个地点，" + places.get(index).name
                 + "，距起点约" + meters[index] + "米。左右滑动可比较。");
         plot.pulse();
     }
-    private android.view.animation.Animation rolling(int from,int to) {
-        android.view.animation.TranslateAnimation a = new android.view.animation.TranslateAnimation(
-                0,0,from*MotionUi.dp(this,28),to*MotionUi.dp(this,28));
-        a.setDuration(190); a.setInterpolator(MotionUi.FLUID); return a;
+    private static final class MeterCounter extends TextView {
+        private float displayed;
+        private ValueAnimator wheel;
+        MeterCounter(Context context) {
+            super(context);
+            setTextSize(26);
+            setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
+            setTextColor(0xff194f41);
+        }
+        void setMeters(int value,boolean animate) {
+            if(wheel!=null) wheel.cancel();
+            setText(value + " 米");
+            if(!animate) { displayed=value; invalidate(); return; }
+            wheel=ValueAnimator.ofFloat(displayed,value);
+            wheel.setDuration(270);
+            wheel.setInterpolator(MotionUi.FLUID);
+            wheel.addUpdateListener(a -> { displayed=(float)a.getAnimatedValue(); invalidate(); });
+            wheel.start();
+        }
+        @Override protected void onDraw(Canvas c) {
+            Paint p=getPaint();
+            p.setColor(getCurrentTextColor());
+            float slot=p.measureText("0"), baseline=getBaseline(), step=p.getFontSpacing(), x=0;
+            int highest=1;
+            while(highest<=displayed/10) highest*=10;
+            c.save();
+            c.clipRect(0,baseline+p.ascent(),getWidth(),baseline+p.descent());
+            int whole=(int)displayed;
+            for(int place=highest;place>0;place/=10) {
+                int digit=whole/place%10;
+                float roll=Math.max(0,displayed%place-(place-1));
+                c.drawText(String.valueOf(digit),x,baseline-roll*step,p);
+                if(roll>0) c.drawText(String.valueOf((digit+1)%10),x,baseline+(1-roll)*step,p);
+                x+=slot;
+            }
+            c.drawText(" 米",x,baseline,p);
+            c.restore();
+        }
+        @Override protected void onDetachedFromWindow() {
+            if(wheel!=null) wheel.cancel();
+            super.onDetachedFromWindow();
+        }
     }
     private final class Plot extends View {
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);

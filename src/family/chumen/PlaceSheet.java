@@ -4,6 +4,9 @@ import android.animation.*;
 import android.app.*;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.graphics.drawable.*;
 import android.view.*;
 import android.widget.*;
@@ -21,6 +24,7 @@ final class PlaceSheet extends Dialog {
     private float openness;
     private int compactHeight, fullHeight;
     private Runnable afterClose;
+    private BitmapDrawable sharedFace;
 
     PlaceSheet(Activity owner, View anchor) {
         super(owner);
@@ -101,17 +105,39 @@ final class PlaceSheet extends Dialog {
         afterClose = null;
         closing = true;
         if (animation != null) animation.cancel();
+        releaseFace();
         super.dismiss();
     }
     private void finishClose() {
+        releaseFace();
         super.dismiss();
         if (afterClose != null) { Runnable run = afterClose; afterClose = null; run.run(); }
+    }
+    private void releaseFace() {
+        if(sharedFace==null) return;
+        sheet.getOverlay().remove(sharedFace);
+        anchor.setAlpha(1);
+        sharedFace=null;
     }
     private void morph(boolean opening) {
         if (animation != null) animation.cancel();
         int[] src = new int[2], dst = new int[2];
-        boolean linked = anchor != null && anchor.isShown() && anchor.isAttachedToWindow();
+        boolean linked = anchor != null && anchor.isShown() && anchor.isAttachedToWindow()
+                && anchor.getGlobalVisibleRect(new Rect());
         if (linked) anchor.getLocationOnScreen(src);
+        if (opening && linked && MotionUi.enabled(sheet)) {
+            float scale=Math.min(1f,1024f/Math.max(anchor.getWidth(),anchor.getHeight()));
+            Bitmap bitmap=Bitmap.createBitmap(Math.max(1,Math.round(anchor.getWidth()*scale)),
+                    Math.max(1,Math.round(anchor.getHeight()*scale)),Bitmap.Config.ARGB_8888);
+            Canvas snapshot=new Canvas(bitmap);
+            snapshot.scale(scale,scale);
+            anchor.draw(snapshot);
+            sharedFace=new BitmapDrawable(sheet.getResources(),bitmap);
+            sharedFace.setGravity(Gravity.FILL);
+            sheet.getOverlay().add(sharedFace);
+            anchor.setAlpha(0);
+        }
+        if(sharedFace!=null) sharedFace.setBounds(0,0,sheet.getWidth(),sheet.getHeight());
         root.getLocationOnScreen(dst);
         float sx = linked ? Math.min(1,anchor.getWidth()/(float)Math.max(1,sheet.getWidth())) : .95f;
         float sy = linked ? Math.min(1,anchor.getHeight()/(float)Math.max(1,sheet.getHeight())) : .85f;
@@ -131,6 +157,7 @@ final class PlaceSheet extends Dialog {
             scrim.setAlpha(f);
             content.setAlpha(Math.max(0, (f-.15f)/.85f));
             handle.setAlpha(f);
+            if(sharedFace!=null) sharedFace.setAlpha(Math.round(255*Math.max(0,1-2.5f*f)));
         });
         animation.addListener(new AnimatorListenerAdapter() {
             private boolean cancelled;
