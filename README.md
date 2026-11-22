@@ -10,6 +10,10 @@
 
 <img src="./chumen-download-qr.png" alt="扫码下载出门最新版安卓安装包" width="294" height="294">
 
+## 界面预览
+
+<img src="./docs/screenshots/home.png" alt="首页的列车和出租车入口" width="220"> <img src="./docs/screenshots/search.png" alt="定位及目的地输入框" width="220">
+
 ## 查公交地铁
 
 第一次可以点「使用当前位置」，在系统提示中允许使用期间访问位置。输入几个字，点选联想列表里的地点，就会打开高德的公交路线。也可以输入完整地址，再点「查看路线」。
