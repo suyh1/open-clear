@@ -120,6 +120,7 @@ final class PlaceSheet extends Dialog {
         sharedFace=null;
     }
     private void morph(boolean opening) {
+        if (opening && (closing || !isShowing())) return;
         if (animation != null) animation.cancel();
         int[] src = new int[2], dst = new int[2];
         boolean linked = anchor != null && anchor.isShown() && anchor.isAttachedToWindow()
@@ -172,7 +173,7 @@ final class PlaceSheet extends Dialog {
         sheet.setLayoutParams(p);
     }
     private void snap(boolean up) {
-        if (closing) return;
+        if (closing || openness < .999f) return;
         expanded = up;
         handle.setContentDescription(up ? "收起面板" : "展开面板");
         if (animation != null) animation.cancel();

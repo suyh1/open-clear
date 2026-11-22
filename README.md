@@ -12,7 +12,7 @@
 
 ## 界面预览
 
-<img src="./docs/screenshots/home.png" alt="首页的列车和出租车入口" width="220"> <img src="./docs/screenshots/search.png" alt="定位及目的地输入框" width="220">
+<img src="./docs/screenshots/home.png" alt="首页的列车和出租车入口" width="200"> <img src="./docs/screenshots/search.png" alt="切换当前位置或输入起点" width="200"> <img src="./docs/screenshots/city.png" alt="常用城市底部面板" width="200">
 
 ## 查公交地铁
 

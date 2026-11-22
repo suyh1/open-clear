@@ -79,6 +79,7 @@ final class DestinationField extends LinearLayout {
         refresh();
     }
     void showError() { invalid = true; refresh(); }
+    void clearError() { if (invalid) { invalid = false; refresh(); } }
     private void refresh() {
         boolean hasText = input.length() > 0;
         boolean raised = input.hasFocus() || hasText;

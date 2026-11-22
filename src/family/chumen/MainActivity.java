@@ -416,6 +416,8 @@ public final class MainActivity extends Activity {
     }
     private void clearResults() {
         cancel();
+        startField.clearError();
+        destinationField.clearError();
         results.removeAllViews();
         message("", false);
     }
