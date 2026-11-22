@@ -6,6 +6,10 @@
 
 在装有高德地图的 Android 8 或更高版本手机上，下载并安装 [最新版 Chumen.apk](https://github.com/suyh1/open-clear/releases/latest/download/Chumen.apk)。后续版本可以覆盖安装。
 
+用小米手机的「扫一扫」扫描下方二维码，即可下载最新正式版。以后更新也扫这个码。
+
+<img src="./chumen-download-qr.png" alt="扫码下载出门最新版安卓安装包" width="294" height="294">
+
 ## 查公交地铁
 
 第一次可以点「使用当前位置」，在系统提示中允许使用期间访问位置。输入几个字，点选联想列表里的地点，就会打开高德的公交路线。也可以输入完整地址，再点「查看路线」。
