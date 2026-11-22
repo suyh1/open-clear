@@ -1,3 +1,16 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="44dp" android:height="44dp" android:viewportWidth="32" android:viewportHeight="32">
-    <path android:fillColor="#382B0D" android:fillType="evenOdd" android:pathData="M12,3H20V6H23Q25,6 26,9L29,16V26H26V29H22V26H10V29H6V26H3V16L6,9Q7,6 9,6H12Z M9,9L7,15H25L23,9Z M7,19v3h4v-3Z M21,19v3h4v-3Z"/>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="144dp" android:height="108dp" android:viewportWidth="144" android:viewportHeight="108">
+    <!-- A city taxi with a roof light, a checker stripe and a near-side headlamp. -->
+    <path android:pathData="M8,94l119,-29m-85,32l30,-7m8,-2l30,-8" android:strokeColor="#BB9140" android:strokeWidth="2" android:strokeLineCap="round"/>
+    <path android:fillColor="#BD9849" android:pathData="M10,81l88,-27 39,8 -83,28z"/>
+    <path android:fillColor="#B57923" android:pathData="M16,56l15,-8 15,-23q4,-4 10,-5l28,-5q7,-1 15,4l14,11 15,4q6,2 7,10l0,11q0,5 -6,7L51,85l-34,-7q-6,-2 -6,-8v-6q0,-5 5,-8z"/>
+    <path android:fillColor="#FFE9A6" android:pathData="M14,57l18,-9 19,-3 55,-14 18,4 -74,23 -28,6 -10,-2z"/>
+    <path android:fillColor="#F1B843" android:pathData="M12,62l39,6 80,-26 2,12q1,5 -5,7L51,82l-35,-7q-5,-1 -5,-6z"/>
+    <path android:fillColor="#F8D66F" android:pathData="M30,47l13,-20q4,-5 11,-6l30,-6q7,0 14,5l14,11 -60,18z"/>
+    <path android:fillColor="#2C4841" android:pathData="M34,46l12,-17q2,-3 7,-4l16,2 -14,20z M74,27l17,-4q3,-1 7,2l7,6 -38,12z"/>
+    <path android:fillColor="#87A69A" android:pathData="M46,30l6,-4 7,1 -14,16 -8,1z M83,27l7,-2 -8,13 -7,2z"/>
+    <path android:fillColor="#FAF5D9" android:pathData="M61,20l2,-7 12,-3 6,5 -1,3 -15,4z"/>
+    <path android:fillColor="#35534A" android:pathData="M15,69l20,3 -1,4 -18,-3z M63,56l5,-2v4l-5,2z M68,58l5,-2v3l-5,2z M73,53l5,-2v4l-5,2z M78,55l5,-2v3l-5,2z M83,50l5,-2v4l-5,2z"/>
+    <path android:fillColor="#FDF6DA" android:pathData="M11,62l9,2 -1,4 -8,-2z M37,65l12,-3 -2,5 -10,3z"/>
+    <path android:fillColor="#253B36" android:pathData="M52,71c2,-7 9,-11 12,-7s0,14 -6,18 -9,-2 -6,-11z M113,52c2,-7 8,-10 11,-6s0,13 -5,16 -8,-2 -6,-10z"/>
+    <path android:fillColor="#E4D5A6" android:pathData="M55,74c2,-7 7,-9 6,-3s-7,12 -6,3z M116,55c1,-6 6,-9 5,-3s-6,10 -5,3z"/>
 </vector>

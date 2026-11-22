@@ -16,12 +16,14 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public final class MainActivity extends Activity {
-    private static final int GREEN = 0xff105750, INK = 0xff162d2b, GOLD = 0xffffd46f;
+    private static final int GREEN = 0xff194f41, INK = 0xff173c32, GOLD = 0xffffd77e;
+    private static final int PAPER = 0xfff6f8f3, SOFT = 0xffe4eee5, MUTED = 0xff4e655a;
     private final ExecutorService pool = Executors.newSingleThreadExecutor();
     private final ExecutorService suggestions = Executors.newFixedThreadPool(2);
     private final Handler handler = new Handler(Looper.getMainLooper());
     private LinearLayout body, results;
     private EditText dest;
+    private DestinationField destinationField;
     private TextView status;
     private Button find, cityButton, locationButton;
     private TripLocation location;
@@ -57,7 +59,7 @@ public final class MainActivity extends Activity {
     @Override protected void onStop() {
         active = false;
         location.stop();
-        if (searching) status.setText("点「查看路线」继续查询");
+        if (searching) message("点「查看路线」继续查询", false);
         cancel();
         super.onStop();
     }
@@ -79,11 +81,13 @@ public final class MainActivity extends Activity {
         inForm = form;
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
+        scroll.setBackgroundColor(PAPER);
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setGravity(Gravity.CENTER_VERTICAL);
         body.setFocusableInTouchMode(true);
-        body.setPadding(dp(22), dp(24), dp(22), dp(28));
+        int inset = Math.max(dp(20), (getResources().getDisplayMetrics().widthPixels - dp(540)) / 2);
+        body.setPadding(inset, dp(20), inset, dp(24));
         scroll.addView(body);
         setContentView(scroll);
     }
@@ -108,6 +112,10 @@ public final class MainActivity extends Activity {
     }
     private Button button(String text, int color, int ink, int size) {
         Button b = new Button(this);
+        styleButton(b, text, color, ink, size);
+        return b;
+    }
+    private void styleButton(Button b, String text, int color, int ink, int size) {
         b.setAllCaps(false);
         b.setText(text);
         b.setTextSize(size);
@@ -116,25 +124,32 @@ public final class MainActivity extends Activity {
         b.setMinHeight(dp(58));
         b.setPadding(dp(16), dp(12), dp(16), dp(12));
         b.setStateListAnimator(null);
-        b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33000000), panel(color), null));
-        return b;
+        StateListDrawable states = new StateListDrawable();
+        GradientDrawable focus = panel(color);
+        focus.setStroke(dp(3), color == GREEN ? GOLD : GREEN);
+        states.addState(new int[]{android.R.attr.state_focused}, focus);
+        states.addState(new int[]{}, panel(color));
+        b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x28000000), states, null));
     }
     private void home() {
         screen(false);
-        add(body, label("今天怎么出门？", 34, true), 0);
+        ImageView mark = new ImageView(this);
+        mark.setImageResource(R.drawable.launcher);
+        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        body.addView(mark, dp(46), dp(46));
+        add(body, label("今天怎么出门？", 34, true), 18);
         Button transit = homeAction("查公交地铁", GREEN, -1, R.drawable.train);
         transit.setOnClickListener(v -> form("", true));
         Button taxi = homeAction("打车", GOLD, 0xff382b0d, R.drawable.taxi);
         taxi.setOnClickListener(v -> openAmap(Places.TAXI));
     }
     private Button homeAction(String text, int color, int ink, int icon) {
-        Button b = button(text, color, ink, 32);
-        b.setMinHeight(dp(108));
+        Button b = new TravelPass(this, icon);
+        styleButton(b, text, color, ink, 30);
+        b.setMinHeight(dp(132));
         b.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-        b.setPadding(dp(22), dp(16), dp(16), dp(16));
-        b.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0);
-        b.setCompoundDrawablePadding(dp(16));
-        add(body, b, 20);
+        b.setPadding(dp(20), dp(18), dp(16), dp(18));
+        add(body, b, 14);
         return b;
     }
     private String city() { return getPreferences(MODE_PRIVATE).getString("city", ""); }
@@ -145,45 +160,54 @@ public final class MainActivity extends Activity {
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
         add(body, top, 0);
-        Button back = button("返回首页", 0xffe6eeeb, INK, 19);
+        Button back = button("首页", PAPER, INK, 19);
+        back.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.back, 0, 0, 0);
+        back.setContentDescription("返回首页");
         top.addView(back);
         back.setOnClickListener(v -> home());
-        locationButton = button("使用当前位置", 0xffe6eeeb, INK, 19);
+        locationButton = button("使用当前位置", SOFT, INK, 18);
+        locationButton.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.pin, 0, 0, 0);
+        locationButton.setCompoundDrawablePadding(dp(6));
         LinearLayout.LayoutParams locationParams = new LinearLayout.LayoutParams(0, -2, 1);
         locationParams.leftMargin = dp(8);
         top.addView(locationButton, locationParams);
         locationButton.setOnClickListener(v -> requestFix());
-        TextView title = label("你要去哪儿？", 34, true);
-        add(body, title, 24);
-        dest = new EditText(this);
-        dest.setId(View.generateViewId());
-        title.setLabelFor(dest.getId());
-        dest.setSingleLine();
-        dest.setTextSize(25);
-        dest.setMinHeight(dp(68));
-        dest.setHint("输入地点名称或地址");
+        add(body, label("你要去哪儿？", 32, true), 18);
+        destinationField = new DestinationField(this);
+        dest = destinationField.input;
         dest.setText(initial);
         dest.setSelection(initial.length());
         dest.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-        add(body, dest, 14);
+        add(body, destinationField, 14);
         dest.setOnEditorActionListener((v, action, e) -> {
             if (action == EditorInfo.IME_ACTION_SEARCH) { search(null); return true; }
             return false;
         });
-        status = label("", 20, false);
+        status = label("", 18, false);
         status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
-        add(body, status, 12);
+        status.setVisibility(View.GONE);
+        add(body, status, 8);
         results = new LinearLayout(this);
         results.setOrientation(LinearLayout.VERTICAL);
-        add(body, results, 0);
+        results.setBackground(panel(0xffffffff));
+        results.setClipToOutline(true);
+        GradientDrawable line = new GradientDrawable();
+        line.setColor(0xffd9e2d9);
+        line.setSize(1, dp(1));
+        results.setDividerDrawable(line);
+        results.setDividerPadding(dp(14));
+        results.setShowDividers(LinearLayout.SHOW_DIVIDER_MIDDLE);
+        add(body, results, 6);
         find = button("查看路线", GREEN, -1, 26);
         find.setOnClickListener(v -> search(null));
         add(body, find, 12);
-        cityButton = button("", 0xffe6eeeb, INK, 18);
+        cityButton = button("", PAPER, GREEN, 18);
         cityLabel();
         cityButton.setOnClickListener(v -> editCity());
         add(body, cityButton, 12);
-        add(body, label("Esri 根据输入的地名提供联想。允许定位后，使用大致位置优先查找附近地点。", 16, false), 16);
+        TextView attribution = label("Esri 根据输入的地名提供联想。允许定位后，使用大致位置优先查找附近地点。", 16, false);
+        attribution.setTextColor(MUTED);
+        add(body, attribution, 10);
         dest.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
             public void onTextChanged(CharSequence s,int start,int before,int count) { queueSuggestions(); }
@@ -254,7 +278,32 @@ public final class MainActivity extends Activity {
     private void clearResults() {
         cancel();
         results.removeAllViews();
-        status.setText("");
+        message("", false);
+    }
+    private void message(String text, boolean error) {
+        status.setTextColor(error ? 0xffa42e21 : MUTED);
+        status.setText(text);
+        status.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+    private void resultRow(String name, String address, String match, View.OnClickListener select) {
+        android.text.SpannableStringBuilder text = new android.text.SpannableStringBuilder(name);
+        int start = name.indexOf(match);
+        if (!match.isEmpty() && start >= 0) {
+            text.setSpan(new android.text.style.StyleSpan(Typeface.BOLD), start, start + match.length(), 0);
+        }
+        if (!address.isEmpty() && !address.equals(name)) {
+            text.append("\n").append(address);
+            text.setSpan(new android.text.style.RelativeSizeSpan(0.88f), name.length()+1, text.length(), 0);
+            text.setSpan(new android.text.style.ForegroundColorSpan(MUTED), name.length()+1, text.length(), 0);
+        }
+        Button row = button("", 0xffffffff, INK, 21);
+        row.setTypeface(Typeface.DEFAULT);
+        row.setText(text);
+        row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        row.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.pin, 0, 0, 0);
+        row.setCompoundDrawablePadding(dp(12));
+        row.setOnClickListener(select);
+        add(results, row, 0);
     }
     private void queueSuggestions() {
         showHints = true;
@@ -273,14 +322,11 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     if (!active || !inForm || token != generation) return;
                     if (found.isEmpty()) {
-                        status.setText("暂无联想，可继续输入或点「查看路线」");
+                        message("暂无联想，可继续输入或点「查看路线」", false);
                         return;
                     }
                     for (Places.Suggestion hint : found) {
-                        Button choice = button(hint.text, 0xffe6eeeb, INK, 20);
-                        choice.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-                        choice.setOnClickListener(v -> search(hint));
-                        add(results, choice, 6);
+                        resultRow(hint.text, "", query, v -> search(hint));
                     }
                     results.announceForAccessibility("有" + found.size() + "个建议地点");
                 });
@@ -290,7 +336,12 @@ public final class MainActivity extends Activity {
     private void search(Places.Suggestion picked) {
         if (searching) return;
         final String q = dest.getText().toString().trim(), city = city(), nearby = location.nearby();
-        if (q.isEmpty()) { dest.setError("请先输入目的地"); dest.requestFocus(); return; }
+        if (q.isEmpty()) {
+            dest.requestFocus();
+            destinationField.showError();
+            message("请先输入目的地", true);
+            return;
+        }
         ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(dest.getWindowToken(), 0);
         clearResults();
         showHints = false;
@@ -301,7 +352,7 @@ public final class MainActivity extends Activity {
         handler.postDelayed(() -> {
             if (token == generation) {
                 cancel();
-                status.setText("查找超时，请检查网络后重试");
+                message("查找超时，请检查网络后重试", true);
             }
         }, 18000);
         pending = pool.submit(() -> {
@@ -320,17 +371,13 @@ public final class MainActivity extends Activity {
                 if (!active || token != generation) return;
                 cancel();
                 if (found.isEmpty()) {
-                    status.setText(error ? "地点服务暂时不可用，请检查网络后再试。" : "没找到这个地方。试试加上城市、区名或街道。");
+                    message(error ? "地点服务暂时不可用，请检查网络后再试。" : "没找到这个地方。试试加上城市、区名或街道。", true);
                 } else if (found.size() == 1 && found.get(0).precise) {
                     openAmap(found.get(0).route(location.origin()));
                 } else {
-                    status.setText("点一下你要去的地点");
+                    message("点一下你要去的地点", false);
                     for (Places.Place place : found) {
-                        String title = place.address.equals(place.name) ? place.name : place.name + "\n" + place.address;
-                        Button choice = button(title, 0xffe6eeeb, INK, 21);
-                        choice.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-                        choice.setOnClickListener(v -> openAmap(place.route(location.origin())));
-                        add(results, choice, 8);
+                        resultRow(place.name, place.address, q, v -> openAmap(place.route(location.origin())));
                     }
                 }
             });
