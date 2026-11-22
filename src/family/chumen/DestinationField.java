@@ -19,9 +19,11 @@ final class DestinationField extends LinearLayout {
     private final ImageButton clear;
     private final GradientDrawable outline = new GradientDrawable();
     private boolean invalid;
+    private final String fieldName;
 
-    DestinationField(Context context) {
+    DestinationField(Context context, String fieldName) {
         super(context);
+        this.fieldName = fieldName;
         setGravity(Gravity.CENTER_VERTICAL);
         setPadding(dp(14), dp(6), dp(4), dp(6));
         setMinimumHeight(dp(74));
@@ -40,7 +42,7 @@ final class DestinationField extends LinearLayout {
         column.leftMargin = dp(10);
         addView(stack, column);
         caption = new TextView(context);
-        caption.setText("目的地");
+        caption.setText(fieldName);
         caption.setTextSize(16);
         caption.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         caption.setTextColor(0xff315d50);
@@ -57,7 +59,7 @@ final class DestinationField extends LinearLayout {
         stack.addView(input, new LayoutParams(-1, -2));
         clear = new ImageButton(context);
         clear.setImageResource(R.drawable.close);
-        clear.setContentDescription("清空目的地");
+        clear.setContentDescription("清空" + fieldName);
         clear.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22315d50), null, null));
         clear.setOnClickListener(v -> { input.requestFocus(); input.setText(""); });
         addView(clear, dp(48), dp(48));
@@ -81,7 +83,7 @@ final class DestinationField extends LinearLayout {
         boolean hasText = input.length() > 0;
         boolean raised = input.hasFocus() || hasText;
         caption.setVisibility(raised ? VISIBLE : GONE);
-        input.setHint(raised ? "地名或地址" : "目的地");
+        input.setHint(raised ? (fieldName.equals("城市名称") ? "例如：成都" : "地名或地址") : fieldName);
         clear.setVisibility(hasText ? VISIBLE : GONE);
         int color = invalid ? 0xffa42e21 : input.hasFocus() ? 0xff246651 : 0xff9eaea5;
         outline.setStroke(dp(invalid || input.hasFocus() ? 2 : 1), color);

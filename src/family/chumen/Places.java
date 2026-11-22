@@ -33,6 +33,9 @@ final class Places {
             return "amapuri://route/plan/?sourceApplication=chumen&t=1&m=0&dev=1&dlat="
                     + lat + "&dlon=" + lon + "&dname=" + encode(name) + origin;
         }
+        String asOrigin() {
+            return "&slat=" + lat + "&slon=" + lon + "&sname=" + encode(name);
+        }
     }
 
     static String encode(String text) {

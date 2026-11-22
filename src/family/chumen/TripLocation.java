@@ -51,6 +51,7 @@ final class TripLocation {
         if (!precise()) return "";
         return "&slat=" + best.getLatitude() + "&slon=" + best.getLongitude() + "&sname=" + Places.encode("当前位置");
     }
+    Location current() { return allowed() && fresh(best) ? new Location(best) : null; }
     void start() {
         stop();
         if (!allowed()) { best = null; update.accept("使用当前位置"); return; }

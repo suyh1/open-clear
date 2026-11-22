@@ -3,14 +3,13 @@ package family.chumen;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
-import android.widget.Button;
 
 /** Keep both the sign and its illustration visible as the user increases the font size. */
-final class TravelPass extends Button {
+final class TravelPass extends MotionUi.PressButton {
     private final Drawable vehicle;
     private boolean stacked;
     TravelPass(Context context, int illustration) {
-        super(context);
+        super(context, true);
         vehicle = context.getDrawable(illustration).mutate();
     }
     @Override protected void onMeasure(int widthSpec, int heightSpec) {

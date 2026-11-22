@@ -21,11 +21,18 @@ public final class MainActivity extends Activity {
     private final ExecutorService pool = Executors.newSingleThreadExecutor();
     private final ExecutorService suggestions = Executors.newFixedThreadPool(2);
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private LinearLayout body, results;
+    private LinearLayout page, body, results, widePasses;
     private EditText dest;
     private DestinationField destinationField;
+    private DestinationField startField;
+    private Button currentSegment, manualSegment;
+    private Places.Place selectedStart, waitingDestination;
+    private PlaceSheet sheet;
+    private boolean manual, editingStart, binding, ready;
+    private String startDraft = "";
     private TextView status;
-    private Button find, cityButton, locationButton;
+    private MotionUi.LookupButton find;
+    private Button cityButton, locationButton;
     private TripLocation location;
     private String suggestionBias = "";
     private boolean showHints;
@@ -38,22 +45,36 @@ public final class MainActivity extends Activity {
         location = new TripLocation(this, text -> {
             if (!inForm || locationButton == null) return;
             locationButton.setText(text);
-            if (showHints && !suggestionBias.equals(location.nearby())) queueSuggestions();
+            if (!manual && showHints && !suggestionBias.equals(location.nearby())) queueSuggestions();
         });
-        if (state != null && state.getBoolean("form")) form(state.getString("text", ""), false);
+        if (state != null && state.getBoolean("form")) {
+            manual = state.getBoolean("manual");
+            startDraft = state.getString("startText", "");
+            if (state.containsKey("startLat")) selectedStart = new Places.Place(startDraft,
+                    state.getString("startAddress",""),state.getDouble("startLat"),state.getDouble("startLon"),true);
+            form(state.getString("text",""),false);
+        }
         else home();
     }
     @Override protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
         state.putBoolean("form", inForm);
-        if (inForm) state.putString("text", dest.getText().toString());
+        if (inForm) {
+            state.putString("text", dest.getText().toString());
+            state.putBoolean("manual",manual);
+            state.putString("startText",startField.input.getText().toString());
+            if (selectedStart != null) {
+                state.putDouble("startLat",selectedStart.lat); state.putDouble("startLon",selectedStart.lon);
+                state.putString("startAddress",selectedStart.address);
+            }
+        }
     }
     @Override protected void onStart() {
         super.onStart();
         active = true;
         if (inForm) {
             if (showHints) queueSuggestions();
-            location.start();
+            if (!manual) location.start();
         }
     }
     @Override protected void onStop() {
@@ -64,6 +85,7 @@ public final class MainActivity extends Activity {
         super.onStop();
     }
     @Override protected void onDestroy() {
+        if (sheet != null) { sheet.setOnDismissListener(null); sheet.dispose(); }
         pool.shutdownNow();
         suggestions.shutdownNow();
         handler.removeCallbacksAndMessages(null);
@@ -76,6 +98,7 @@ public final class MainActivity extends Activity {
 
     private int dp(int n) { return Math.round(getResources().getDisplayMetrics().density * n); }
     private void screen(boolean form) {
+        ready = false;
         cancel();
         location.stop();
         inForm = form;
@@ -89,7 +112,11 @@ public final class MainActivity extends Activity {
         int inset = Math.max(dp(20), (getResources().getDisplayMetrics().widthPixels - dp(540)) / 2);
         body.setPadding(inset, dp(20), inset, dp(24));
         scroll.addView(body);
-        setContentView(scroll);
+        page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(PAPER);
+        page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        setContentView(page);
     }
     private void add(LinearLayout parent, View child, int gap) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
@@ -111,7 +138,7 @@ public final class MainActivity extends Activity {
         return shape;
     }
     private Button button(String text, int color, int ink, int size) {
-        Button b = new Button(this);
+        Button b = new MotionUi.PressButton(this,false);
         styleButton(b, text, color, ink, size);
         return b;
     }
@@ -133,11 +160,18 @@ public final class MainActivity extends Activity {
     }
     private void home() {
         screen(false);
+        manual = false; editingStart=false; selectedStart=null; waitingDestination=null; startDraft="";
+        widePasses = null;
         ImageView mark = new ImageView(this);
         mark.setImageResource(R.drawable.launcher);
         mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         body.addView(mark, dp(46), dp(46));
         add(body, label("怎么出门？", 34, true), 18);
+        if (getResources().getConfiguration().screenWidthDp >= 540
+                && getResources().getConfiguration().fontScale < 1.4f) {
+            widePasses = new LinearLayout(this);
+            add(body,widePasses,14);
+        }
         Button transit = homeAction("查公交地铁", GREEN, -1, R.drawable.train);
         transit.setOnClickListener(v -> form("", true));
         Button taxi = homeAction("打车", GOLD, 0xff382b0d, R.drawable.taxi);
@@ -146,10 +180,15 @@ public final class MainActivity extends Activity {
     private Button homeAction(String text, int color, int ink, int icon) {
         Button b = new TravelPass(this, icon);
         styleButton(b, text, color, ink, 30);
-        b.setMinHeight(dp(132));
+        b.setMinHeight(dp(icon == R.drawable.train ? 152 : 124));
         b.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         b.setPadding(dp(20), dp(18), dp(16), dp(18));
-        add(body, b, 14);
+        if(widePasses == null) add(body,b,14);
+        else {
+            LinearLayout.LayoutParams cell = new LinearLayout.LayoutParams(0,-1,icon==R.drawable.train?1.2f:1f);
+            if(widePasses.getChildCount()>0) cell.leftMargin=dp(12);
+            widePasses.addView(b,cell);
+        }
         return b;
     }
     private String city() { return getPreferences(MODE_PRIVATE).getString("city", ""); }
@@ -157,72 +196,127 @@ public final class MainActivity extends Activity {
         screen(true);
         showHints = true;
         body.setGravity(Gravity.TOP);
-        LinearLayout top = new LinearLayout(this);
-        boolean largeType = getResources().getConfiguration().fontScale >= 1.4f
-                && getResources().getConfiguration().screenWidthDp < 400;
-        top.setOrientation(largeType ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        add(body, top, 0);
-        Button back = button("首页", PAPER, INK, 19);
-        back.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.back, 0, 0, 0);
+        MotionUi.AuroraBar nav = new MotionUi.AuroraBar(this);
+        nav.setGravity(Gravity.CENTER_VERTICAL);
+        nav.setPadding(dp(10),dp(6),dp(10),dp(6));
+        LinearLayout.LayoutParams navParams = new LinearLayout.LayoutParams(-1,-2);
+        int inset = body.getPaddingLeft();
+        navParams.setMargins(inset,dp(4),inset,0);
+        page.addView(nav,0,navParams);
+        Button back = button("首页",0,INK,18);
+        back.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.back,0,0,0);
         back.setContentDescription("返回首页");
-        top.addView(back, -2, -2);
         back.setOnClickListener(v -> home());
-        locationButton = button("使用当前位置", SOFT, INK, 18);
-        locationButton.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.pin, 0, 0, 0);
-        locationButton.setCompoundDrawablePadding(dp(6));
-        LinearLayout.LayoutParams locationParams = largeType ? new LinearLayout.LayoutParams(-1, -2)
-                : new LinearLayout.LayoutParams(0, -2, 1);
-        if (!largeType) locationParams.leftMargin = dp(8);
-        top.addView(locationButton, locationParams);
+        nav.addView(back,-2,-2);
+        cityButton = button("",SOFT,GREEN,18);
+        cityLabel();
+        cityButton.setOnClickListener(v -> editCity());
+        nav.addView(cityButton,new LinearLayout.LayoutParams(0,-2,1));
+        add(body, label("去哪儿？", 32, true), 0);
+        LinearLayout segments = new LinearLayout(this);
+        segments.setPadding(dp(4),dp(4),dp(4),dp(4));
+        segments.setBackground(panel(SOFT));
+        add(body,segments,10);
+        currentSegment = button("当前位置",SOFT,INK,19);
+        manualSegment = button("输入起点",SOFT,INK,19);
+        for(Button segment : new Button[]{currentSegment,manualSegment}) {
+            segment.setPadding(dp(4),dp(6),dp(4),dp(6));
+            segments.addView(segment,new LinearLayout.LayoutParams(0,-2,1));
+        }
+        currentSegment.setOnClickListener(v -> setOriginMode(false,true));
+        manualSegment.setOnClickListener(v -> setOriginMode(true,true));
+        startField = new DestinationField(this,"起点");
+        startField.input.setText(startDraft);
+        startField.input.setImeOptions(EditorInfo.IME_ACTION_NEXT);
+        add(body,startField,8);
+        locationButton = button("使用当前位置",PAPER,GREEN,18);
+        locationButton.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
+        locationButton.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.pin,0,0,0);
+        locationButton.setCompoundDrawablePadding(dp(8));
         locationButton.setOnClickListener(v -> requestFix());
-        add(body, label("去哪儿？", 32, true), 18);
-        destinationField = new DestinationField(this);
+        add(body,locationButton,0);
+        destinationField = new DestinationField(this,"目的地");
         dest = destinationField.input;
         dest.setText(initial);
         dest.setSelection(initial.length());
         dest.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-        add(body, destinationField, 14);
-        dest.setOnEditorActionListener((v, action, e) -> {
-            if (action == EditorInfo.IME_ACTION_SEARCH) { search(null); return true; }
-            return false;
-        });
-        status = label("", 18, false);
-        status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        add(body,destinationField,8);
+        status = label("",18,false);
         status.setVisibility(View.GONE);
-        add(body, status, 8);
+        status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        add(body,status,8);
         results = new LinearLayout(this);
         results.setOrientation(LinearLayout.VERTICAL);
         results.setBackground(panel(0xffffffff));
         results.setClipToOutline(true);
-        GradientDrawable line = new GradientDrawable();
-        line.setColor(0xffd9e2d9);
-        line.setSize(1, dp(1));
+        GradientDrawable line=panel(0xffd9e2d9);
+        line.setSize(1,dp(1));
         results.setDividerDrawable(line);
         results.setDividerPadding(dp(14));
         results.setShowDividers(LinearLayout.SHOW_DIVIDER_MIDDLE);
-        add(body, results, 6);
-        find = button("查看路线", GREEN, -1, 26);
-        find.setOnClickListener(v -> search(null));
-        add(body, find, 12);
-        cityButton = button("", PAPER, GREEN, 18);
-        cityLabel();
-        cityButton.setOnClickListener(v -> editCity());
-        add(body, cityButton, 12);
-        TextView attribution = label("Esri 根据输入的地名提供联想。允许定位后，使用大致位置优先查找附近地点。", 16, false);
+        add(body,results,4);
+        find=new MotionUi.LookupButton(this);
+        styleButton(find,"查看路线",GREEN,-1,26);
+        find.prepare();
+        find.setOnClickListener(v -> resolve(false,null));
+        add(body,find,8);
+        TextView attribution=label("输入的地名将发送给 Esri。定位后，优先查找附近地点。",16,false);
         attribution.setTextColor(MUTED);
-        add(body, attribution, 10);
-        dest.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
-            public void onTextChanged(CharSequence s,int start,int before,int count) { queueSuggestions(); }
+        add(body,attribution,12);
+        bindField(startField,true);
+        bindField(destinationField,false);
+        ready=true;
+        setOriginMode(manual,false);
+        if(keyboard) focus(dest,true);
+    }
+    private void focus(EditText field, boolean keyboard) {
+        field.requestFocus();
+        if(keyboard) field.post(() -> {
+            if(field.hasFocus() && field.isShown())
+                getSystemService(InputMethodManager.class).showSoftInput(field,InputMethodManager.SHOW_IMPLICIT);
+        });
+    }
+    private void bindField(DestinationField field, boolean start) {
+        View.OnFocusChangeListener style=field.input.getOnFocusChangeListener();
+        field.input.setOnFocusChangeListener((v,hasFocus) -> {
+            style.onFocusChange(v,hasFocus);
+            if(ready && hasFocus && !binding && inForm && sheet==null) {
+                editingStart=start;
+                queueSuggestions();
+            }
+        });
+        field.input.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s,int pos,int count,int after) {}
+            public void onTextChanged(CharSequence s,int pos,int before,int count) {
+                if(!ready || binding) return;
+                if(start) selectedStart=null;
+                else waitingDestination=null;
+                editingStart=start;
+                queueSuggestions();
+            }
             public void afterTextChanged(Editable s) {}
         });
-        if (active) location.start();
-        if (keyboard) {
-            dest.requestFocus();
-            dest.post(() -> ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE))
-                    .showSoftInput(dest, InputMethodManager.SHOW_IMPLICIT));
+        field.input.setOnEditorActionListener((v,action,event) -> {
+            if(action!=EditorInfo.IME_ACTION_NEXT && action!=EditorInfo.IME_ACTION_SEARCH) return false;
+            resolve(start,null); return true;
+        });
+    }
+    private void setOriginMode(boolean custom, boolean interacted) {
+        manual=custom;
+        editingStart=custom && interacted;
+        waitingDestination=null;
+        clearResults();
+        for(Button b:new Button[]{currentSegment,manualSegment}) {
+            boolean on = b==(custom?manualSegment:currentSegment);
+            b.setSelected(on);
+            b.setTextColor(on?-1:INK);
+            b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22000000),panel(on?GREEN:SOFT),null));
         }
+        startField.setVisibility(custom?View.VISIBLE:View.GONE);
+        locationButton.setVisibility(custom?View.GONE:View.VISIBLE);
+        if(custom) location.stop();
+        else if(active) location.start();
+        if(interacted) focus(custom?startField.input:dest,true);
     }
     private void requestFix() {
         if (location.allowed()) {
@@ -251,23 +345,62 @@ public final class MainActivity extends Activity {
         if (active && inForm) location.start();
     }
     private void cityLabel() {
-        cityButton.setText(city().isEmpty() ? "设置常用城市" : "常用城市 · " + city());
+        String city=city();
+        cityButton.setText(city.isEmpty()?"设置常用城市":"常用城市 · "+city);
+        if(MotionUi.enabled(cityButton) && getResources().getConfiguration().fontScale<1.4f) {
+            cityButton.setSingleLine();
+            cityButton.setEllipsize(TextUtils.TruncateAt.MARQUEE);
+            cityButton.setMarqueeRepeatLimit(2);
+            cityButton.setSelected(!city.isEmpty());
+        } else {
+            cityButton.setSingleLine(false);
+        }
+    }
+    private PlaceSheet newSheet(View anchor) {
+        getSystemService(InputMethodManager.class).hideSoftInputFromWindow(anchor.getWindowToken(),0);
+        PlaceSheet opened=new PlaceSheet(this,anchor);
+        sheet=opened;
+        opened.setOnDismissListener(d -> { if(sheet==opened) sheet=null; });
+        return opened;
     }
     private void editCity() {
-        showHints = false;
+        if(sheet!=null) return;
         clearResults();
-        final EditText field = new EditText(this);
-        field.setHint("例如：成都");
-        field.setSingleLine();
-        field.setTextSize(24);
-        field.setText(city());
-        new AlertDialog.Builder(this).setTitle("常用城市").setView(field)
-                .setPositiveButton("保存", (d, w) -> {
-                    getPreferences(MODE_PRIVATE).edit().putString("city", field.getText().toString().trim()).apply();
-                    cityLabel();
-                }).setNegativeButton("返回", null).setOnDismissListener(d -> {
-                    if (active && inForm) queueSuggestions();
-                }).show();
+        showHints=false;
+        PlaceSheet opened=newSheet(cityButton);
+        LinearLayout content=opened.content;
+        TextView heading=label("常用城市",30,true);
+        heading.setCompoundDrawablesRelativeWithIntrinsicBounds(0,0,R.drawable.city,0);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        add(content,heading,0);
+        add(content,label("查地点时优先在这个城市搜索。留空可搜索其他城市。",17,false),6);
+        DestinationField cityInput=new DestinationField(this,"城市名称");
+        cityInput.input.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        cityInput.input.setText(city());
+        cityInput.input.setSelection(cityInput.input.length());
+        add(content,cityInput,14);
+        Runnable save=() -> {
+            String value=cityInput.input.getText().toString().trim();
+            getPreferences(MODE_PRIVATE).edit().putString("city",value).apply();
+            cityLabel();
+            opened.dismiss();
+        };
+        Button saveButton=button("保存",GREEN,-1,22);
+        saveButton.setOnClickListener(v -> save.run());
+        add(content,saveButton,14);
+        Button discard=button("取消",0,INK,18);
+        discard.setOnClickListener(v -> opened.dismiss());
+        add(content,discard,2);
+        cityInput.input.setOnEditorActionListener((v,action,event) -> {
+            if(action!=EditorInfo.IME_ACTION_DONE) return false;
+            save.run(); return true;
+        });
+        opened.setOnDismissListener(d -> {
+            if(sheet!=opened) return;
+            sheet=null;
+            if(ready && active && inForm) queueSuggestions();
+        });
+        opened.show();
     }
     private void cancel() {
         generation++;
@@ -277,7 +410,9 @@ public final class MainActivity extends Activity {
             pending = null;
         }
         handler.removeCallbacksAndMessages(null);
-        if (find != null) { find.setEnabled(true); find.setText("查看路线"); }
+        if(results!=null && results.getChildCount()==1 && results.getChildAt(0) instanceof MotionUi.Skeleton)
+            results.removeAllViews();
+        if (find != null) { find.setLoading(false); find.setEnabled(true); find.setText("查看路线"); }
     }
     private void clearResults() {
         cancel();
@@ -308,16 +443,33 @@ public final class MainActivity extends Activity {
         row.setCompoundDrawablePadding(dp(12));
         row.setOnClickListener(select);
         add(results, row, 0);
+        MotionUi.enter(row,results.getChildCount()-1);
+    }
+    private void skeleton() {
+        results.removeAllViews();
+        results.addView(new MotionUi.Skeleton(this),-1,dp(62));
+    }
+    private void placeResultsAfter(boolean start) {
+        View field=start?startField:destinationField;
+        if(body.indexOfChild(status)==body.indexOfChild(field)+1) return;
+        body.removeView(status);
+        body.removeView(results);
+        int index=body.indexOfChild(field)+1;
+        body.addView(status,index);
+        body.addView(results,index+1);
     }
     private void queueSuggestions() {
         showHints = true;
         clearResults();
-        if (!active || !inForm) return;
-        String query = dest.getText().toString().trim(), city = city(), nearby = location.nearby();
+        if (!ready || !active || !inForm || sheet!=null) return;
+        final boolean start = manual && editingStart;
+        placeResultsAfter(start);
+        String query = (start?startField.input:dest).getText().toString().trim(), city = city(), nearby = searchBias(start);
         suggestionBias = nearby;
         if (query.isEmpty()) return;
         int token = generation;
         handler.postDelayed(() -> {
+            skeleton();
             pending = suggestions.submit(() -> {
                 List<Places.Suggestion> hints;
                 try { hints = Places.suggest(query, city, nearby); }
@@ -325,67 +477,159 @@ public final class MainActivity extends Activity {
                 final List<Places.Suggestion> found = hints;
                 runOnUiThread(() -> {
                     if (!active || !inForm || token != generation) return;
+                    results.removeAllViews();
                     if (found.isEmpty()) {
                         message("暂无联想，可继续输入或点「查看路线」", false);
                         return;
                     }
                     for (Places.Suggestion hint : found) {
-                        resultRow(hint.text, "", query, v -> search(hint));
+                        resultRow(hint.text, "", query, v -> resolve(start,hint));
                     }
                     results.announceForAccessibility("有" + found.size() + "个建议地点");
                 });
             });
         }, 350);
     }
-    private void search(Places.Suggestion picked) {
-        if (searching) return;
-        final String q = dest.getText().toString().trim(), city = city(), nearby = location.nearby();
-        if (q.isEmpty()) {
-            dest.requestFocus();
-            destinationField.showError();
-            message("请先输入目的地", true);
+    private String searchBias(boolean start) {
+        if(!manual) return location.nearby();
+        if(start || selectedStart==null) return "";
+        return String.format(Locale.ROOT,"&location=%.2f,%.2f",selectedStart.lon,selectedStart.lat);
+    }
+    private void requireText(DestinationField field,String prompt) {
+        focus(field.input,true);
+        clearResults();
+        field.showError();
+        message(prompt,true);
+    }
+    private void resolve(boolean start, Places.Suggestion picked) {
+        if(searching || sheet!=null) return;
+        final DestinationField field=start?startField:destinationField;
+        final String q=field.input.getText().toString().trim(), city=city(), nearby=searchBias(start);
+        if(q.isEmpty()) {
+            requireText(field,start?"请先输入起点":"请先输入目的地");
             return;
         }
-        ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(dest.getWindowToken(), 0);
+        if(!start && manual && startField.input.getText().toString().trim().isEmpty()) {
+            requireText(startField,"请输入起点，或选择「当前位置」");
+            return;
+        }
+        if(start && selectedStart!=null && picked==null) {
+            choose(true,selectedStart); return;
+        }
+        getSystemService(InputMethodManager.class).hideSoftInputFromWindow(field.getWindowToken(),0);
+        placeResultsAfter(start);
         clearResults();
-        showHints = false;
-        final int token = generation;
-        searching = true;
+        showHints=false;
+        final int token=generation;
+        searching=true;
         find.setEnabled(false);
-        find.setText("正在查找…");
+        find.setLoading(true);
+        find.setText(start?"正在查找起点…":"正在查找目的地…");
+        handler.postDelayed(() -> { if(searching && token==generation) skeleton(); },220);
         handler.postDelayed(() -> {
-            if (token == generation) {
-                cancel();
-                message("查找超时，请检查网络后重试", true);
+            if(token!=generation) return;
+            clearResults();
+            message("查找超时，请检查网络后重试",true);
+        },18000);
+        pending=pool.submit(() -> {
+            List<Places.Place> places=Collections.emptyList();
+            boolean failed=false;
+            try { places=Places.search(q,city,nearby,picked); }
+            catch(Exception unavailable) { failed=true; }
+            if(Thread.currentThread().isInterrupted()) return;
+            if(places.isEmpty() && Geocoder.isPresent()) {
+                try { places=deviceSearch(picked==null?q:picked.text,city); }
+                catch(Exception unavailable) { failed=true; }
             }
-        }, 18000);
-        pending = pool.submit(() -> {
-            List<Places.Place> places = Collections.emptyList();
-            boolean failed = false;
-            try { places = Places.search(q, city, nearby, picked); }
-            catch (Exception unavailable) { failed = true; }
-            if (Thread.currentThread().isInterrupted()) return;
-            if (places.isEmpty() && Geocoder.isPresent()) {
-                try { places = deviceSearch(picked == null ? q : picked.text, city); }
-                catch (Exception unavailable) { failed = true; }
-            }
-            final List<Places.Place> found = places;
-            final boolean error = failed;
+            final List<Places.Place> found=places;
+            final boolean error=failed;
             runOnUiThread(() -> {
-                if (!active || token != generation) return;
-                cancel();
-                if (found.isEmpty()) {
-                    message(error ? "地点服务暂时不可用，请检查网络后再试。" : "没找到这个地方。试试加上城市、区名或街道。", true);
-                } else if (found.size() == 1 && found.get(0).precise) {
-                    openAmap(found.get(0).route(location.origin()));
+                if(!active || token!=generation) return;
+                clearResults();
+                if(found.isEmpty()) {
+                    String which=start?"起点":"目的地";
+                    message(error?"地点服务暂时不可用，请检查网络后再试。":"没找到这个"+which+"。试试加上城市或街道。",true);
+                } else if(found.size()==1 && found.get(0).precise) {
+                    choose(start,found.get(0));
                 } else {
-                    message("点一下你要去的地点", false);
-                    for (Places.Place place : found) {
-                        resultRow(place.name, place.address, q, v -> openAmap(place.route(location.origin())));
+                    message(start?"请选择出发地点":"请选择目的地",false);
+                    if(!start && found.size()>1) offerComparison(found);
+                    for(Places.Place place:found) {
+                        resultRow(place.name,place.address,q,v -> details(v,start,place));
                     }
                 }
             });
         });
+    }
+    private void choose(boolean start, Places.Place place) {
+        if(start) {
+            selectedStart=place;
+            binding=true;
+            startField.input.setText(place.name);
+            startField.input.setSelection(place.name.length());
+            binding=false;
+            clearResults();
+            editingStart=false;
+            if(waitingDestination!=null) {
+                Places.Place end=waitingDestination;
+                waitingDestination=null;
+                openAmap(end.route(place.asOrigin()));
+            } else {
+                focus(dest,dest.length()==0);
+                if(dest.length()>0) message("已设置起点，点「查看路线」继续",false);
+            }
+        } else if(manual && selectedStart==null) {
+            waitingDestination=place;
+            binding=true;
+            dest.setText(place.name);
+            dest.setSelection(place.name.length());
+            binding=false;
+            resolve(true,null);
+        } else {
+            openAmap(place.route(manual?selectedStart.asOrigin():location.origin()));
+        }
+    }
+    private void details(View anchor,boolean start,Places.Place place) {
+        if(sheet!=null) return;
+        PlaceSheet opened=newSheet(anchor);
+        add(opened.content,label(place.name,28,true),0);
+        if(!place.address.equals(place.name)) add(opened.content,label(place.address,19,false),10);
+        Button use=button(start?"从这里出发":"去这里",GREEN,-1,23);
+        use.setOnClickListener(v -> opened.closeThen(() -> {
+            sheet=null;
+            choose(start,place);
+        }));
+        add(opened.content,use,18);
+        Button back=button("返回地点列表",0,INK,18);
+        back.setOnClickListener(v -> opened.dismiss());
+        add(opened.content,back,2);
+        opened.show();
+    }
+    private void offerComparison(List<Places.Place> choices) {
+        final double lat,lon;
+        if(manual && selectedStart!=null) { lat=selectedStart.lat; lon=selectedStart.lon; }
+        else if(!manual) {
+            Location fix=location.current();
+            if(fix==null) return;
+            lat=fix.getLatitude(); lon=fix.getLongitude();
+        } else return;
+        Button compare=button("比较距起点的距离",SOFT,GREEN,18);
+        compare.setOnClickListener(v -> {
+            if(sheet!=null) return;
+            PlaceSheet opened=newSheet(v);
+            add(opened.content,label("直线距离",27,true),0);
+            add(opened.content,label("左右滑动查看各地点距起点的距离",17,false),4);
+            DistanceProfile profile=new DistanceProfile(this,choices,lat,lon);
+            add(opened.content,profile,14);
+            Button use=button("去选中的地点",GREEN,-1,20);
+            use.setOnClickListener(w -> opened.closeThen(() -> {
+                sheet=null;
+                choose(false,choices.get(profile.index()));
+            }));
+            add(opened.content,use,10);
+            opened.show();
+        });
+        add(results,compare,0);
     }
     @SuppressWarnings("deprecation")
     private List<Places.Place> deviceSearch(String query, String city) throws Exception {
