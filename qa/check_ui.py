@@ -66,6 +66,7 @@ for name, width, font in [("standard", 786, "1.0"), ("large", 640, "1.6")]:
     capture(name + "-validation")
     tap("输入起点")
     assert control("输入起点").get("selected") == "true"
+    capture(name + "-manual")
     adb("shell", "input", "text", "Shanghai")
     control("清空起点")
     tap("当前位置")
@@ -76,7 +77,13 @@ for name, width, font in [("standard", 786, "1.0"), ("large", 640, "1.6")]:
     tap("设置常用城市")
     control("城市名称")
     capture(name + "-city")
-    tap("展开面板")
+    if name == "standard":
+        handle = control("展开面板")
+        left, top, right, bottom = map(int, re.findall(r"\d+", handle.get("bounds")))
+        x, y = str((left + right) // 2), (top + bottom) // 2
+        adb("shell", "input", "swipe", x, str(y), x, str(max(54, y - 510)), "280")
+    else:
+        tap("展开面板")
     tap("收起面板")
     tap("城市名称")
     adb("shell", "input", "text", "Shanghai")

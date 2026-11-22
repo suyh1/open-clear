@@ -187,6 +187,13 @@ final class PlaceSheet extends Dialog {
         int initial;
         boolean moved;
         VelocityTracker tracker;
+        private void track(MotionEvent event) {
+            // The handle moves under the finger. Velocity must use screen coordinates.
+            MotionEvent screenEvent=MotionEvent.obtain(event);
+            screenEvent.offsetLocation(event.getRawX()-event.getX(),event.getRawY()-event.getY());
+            tracker.addMovement(screenEvent);
+            screenEvent.recycle();
+        }
         public boolean onTouch(View v, MotionEvent e) {
             switch(e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -194,10 +201,10 @@ final class PlaceSheet extends Dialog {
                     if (animation != null && animation.isRunning()) return false;
                     start=e.getRawY(); initial=sheet.getHeight(); moved=false;
                     if (tracker != null) tracker.recycle();
-                    tracker=VelocityTracker.obtain(); tracker.addMovement(e); return true;
+                    tracker=VelocityTracker.obtain(); track(e); return true;
                 case MotionEvent.ACTION_MOVE:
                     if (tracker == null) return false;
-                    tracker.addMovement(e);
+                    track(e);
                     float delta=start-e.getRawY();
                     if (Math.abs(delta)>ViewConfiguration.get(v.getContext()).getScaledTouchSlop()) moved=true;
                     if (moved) {
@@ -210,7 +217,7 @@ final class PlaceSheet extends Dialog {
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     if(tracker==null) return false;
-                    tracker.addMovement(e); tracker.computeCurrentVelocity(1000);
+                    track(e); tracker.computeCurrentVelocity(1000);
                     float speed=tracker.getYVelocity(); tracker.recycle(); tracker=null;
                     if(e.getActionMasked()==MotionEvent.ACTION_CANCEL) snap(expanded);
                     else if(!moved) v.performClick();

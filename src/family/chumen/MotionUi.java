@@ -38,16 +38,20 @@ final class MotionUi {
                 new int[]{0x00ffffff, 0x10ffffff, 0x55ffffff, 0x0affffff, 0x00ffffff},
                 new float[]{0, .36f, .5f, .62f, 1}, Shader.TileMode.CLAMP);
         private final Paint shade = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Matrix depthMatrix = new Matrix();
+        private final LinearGradient depth = new LinearGradient(0,0,0,1,
+                new int[]{0x48051912,0x15051912,0x00051912,0x00051912,0x19051912},
+                new float[]{0,.035f,.12f,.92f,1},Shader.TileMode.CLAMP);
         private float touchX, touchY;
         PressButton(Context c, boolean tilt) {
             super(c);
             this.tilt = tilt;
             setCameraDistance(dp(this, 1400));
             shine.setShader(mirror);
-            shade.setStyle(Paint.Style.STROKE);
-            shade.setStrokeWidth(dp(this, 3));
+            shade.setShader(depth);
         }
         @Override public boolean onTouchEvent(MotionEvent e) {
+            if(e.getActionMasked()==MotionEvent.ACTION_DOWN && isEnabled()) animatePress(true);
             if (e.getActionMasked() == MotionEvent.ACTION_DOWN || e.getActionMasked() == MotionEvent.ACTION_MOVE) {
                 touchX = Math.max(0, Math.min(getWidth(), e.getX()));
                 touchY = Math.max(0, Math.min(getHeight(), e.getY()));
@@ -61,6 +65,10 @@ final class MotionUi {
             int action = e.getActionMasked();
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) animatePress(false);
             return handled;
+        }
+        @Override public boolean performClick() {
+            if(isEnabled() && isShown()) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            return super.performClick();
         }
         @Override public void setPressed(boolean down) {
             boolean changed = down != isPressed();
@@ -92,8 +100,10 @@ final class MotionUi {
                 shine.setAlpha((int)(255 * amount));
                 c.drawRoundRect(0, 0, getWidth(), getHeight(), radius, radius, shine);
             }
-            shade.setColor(Color.argb((int)(40 * amount), 8, 28, 24));
-            c.drawRoundRect(1, 1, getWidth()-1, getHeight()-1, radius, radius, shade);
+            depthMatrix.setScale(1,getHeight());
+            depth.setLocalMatrix(depthMatrix);
+            shade.setAlpha((int)(255*amount));
+            c.drawRoundRect(0,0,getWidth(),getHeight(),radius,radius,shade);
         }
     }
 

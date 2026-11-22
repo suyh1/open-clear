@@ -424,7 +424,8 @@ public final class MainActivity extends Activity {
         status.setText(text);
         status.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
     }
-    private void resultRow(String name, String address, String match, View.OnClickListener select) {
+    private void resultRow(String name, String address, String match, View.OnClickListener detail,
+                           View.OnClickListener quickSelect) {
         android.text.SpannableStringBuilder text = new android.text.SpannableStringBuilder(name);
         int start = name.indexOf(match);
         if (!match.isEmpty() && start >= 0) {
@@ -441,9 +442,24 @@ public final class MainActivity extends Activity {
         row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         row.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.pin, 0, 0, 0);
         row.setCompoundDrawablePadding(dp(12));
-        row.setOnClickListener(select);
-        add(results, row, 0);
-        MotionUi.enter(row,results.getChildCount()-1);
+        row.setOnClickListener(detail);
+        View entry=row;
+        if(quickSelect!=null) {
+            LinearLayout group=new LinearLayout(this);
+            group.setGravity(Gravity.CENTER_VERTICAL);
+            group.addView(row,new LinearLayout.LayoutParams(0,-2,1));
+            Button use=button("选用",SOFT,GREEN,17);
+            use.setMinWidth(dp(55));
+            use.setMinimumWidth(dp(55));
+            use.setPadding(dp(8),dp(5),dp(8),dp(5));
+            use.setOnClickListener(quickSelect);
+            LinearLayout.LayoutParams shortcut=new LinearLayout.LayoutParams(-2,-2);
+            shortcut.rightMargin=dp(6);
+            group.addView(use,shortcut);
+            entry=group;
+        }
+        add(results,entry,0);
+        MotionUi.enter(entry,results.getChildCount()-1);
     }
     private void skeleton() {
         results.removeAllViews();
@@ -459,9 +475,10 @@ public final class MainActivity extends Activity {
         body.addView(results,index+1);
     }
     private void queueSuggestions() {
+        if (!ready || !inForm || sheet!=null) return;
         showHints = true;
         clearResults();
-        if (!ready || !active || !inForm || sheet!=null) return;
+        if (!active) return;
         final boolean start = manual && editingStart;
         placeResultsAfter(start);
         String query = (start?startField.input:dest).getText().toString().trim(), city = city(), nearby = searchBias(start);
@@ -483,7 +500,7 @@ public final class MainActivity extends Activity {
                         return;
                     }
                     for (Places.Suggestion hint : found) {
-                        resultRow(hint.text, "", query, v -> resolve(start,hint));
+                        resultRow(hint.text,"",query,v -> suggestionDetails(v,start,hint),v -> resolve(start,hint));
                     }
                     results.announceForAccessibility("有" + found.size() + "个建议地点");
                 });
@@ -494,6 +511,9 @@ public final class MainActivity extends Activity {
         if(!manual) return location.nearby();
         if(start || selectedStart==null) return "";
         return String.format(Locale.ROOT,"&location=%.2f,%.2f",selectedStart.lon,selectedStart.lat);
+    }
+    private void suggestionDetails(View anchor, boolean start, Places.Suggestion hint) {
+        showPlace(anchor,start,hint.text,"",() -> resolve(start,hint));
     }
     private void requireText(DestinationField field,String prompt) {
         focus(field.input,true);
@@ -555,7 +575,8 @@ public final class MainActivity extends Activity {
                     message(start?"请选择出发地点":"请选择目的地",false);
                     if(!start && found.size()>1) offerComparison(found);
                     for(Places.Place place:found) {
-                        resultRow(place.name,place.address,q,v -> details(v,start,place));
+                        resultRow(place.name,place.address,q,
+                                v -> showPlace(v,start,place.name,place.address,() -> choose(start,place)),null);
                     }
                 }
             });
@@ -589,15 +610,16 @@ public final class MainActivity extends Activity {
             openAmap(place.route(manual?selectedStart.asOrigin():location.origin()));
         }
     }
-    private void details(View anchor,boolean start,Places.Place place) {
+    private void showPlace(View anchor,boolean start,String name,String address,Runnable accept) {
         if(sheet!=null) return;
+        showHints=false;
         PlaceSheet opened=newSheet(anchor);
-        add(opened.content,label(place.name,28,true),0);
-        if(!place.address.equals(place.name)) add(opened.content,label(place.address,19,false),10);
+        add(opened.content,label(name,28,true),0);
+        if(!address.isEmpty() && !address.equals(name)) add(opened.content,label(address,19,false),10);
         Button use=button(start?"从这里出发":"去这里",GREEN,-1,23);
         use.setOnClickListener(v -> opened.closeThen(() -> {
             sheet=null;
-            choose(start,place);
+            accept.run();
         }));
         add(opened.content,use,18);
         Button back=button("返回地点列表",0,INK,18);

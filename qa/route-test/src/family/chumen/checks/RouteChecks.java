@@ -49,6 +49,11 @@ public final class RouteChecks extends Instrumentation {
             click("查看路线");
             checkHandoff(null,"终点");
 
+            write(0,"联想");
+            click("联想终点");
+            dialogNode("去这里",true);
+            checkHandoff(null,"终点");
+
             click("输入起点");
             write(0,"起点 & A");
             write(1,"终点");
@@ -83,13 +88,18 @@ public final class RouteChecks extends Instrumentation {
     }
     private static String fixture(URL u) throws JSONException,IOException {
         if(!"geocode.arcgis.com".equals(u.getHost())) throw new IOException("Unexpected test host");
-        if(u.getPath().endsWith("/suggest")) return "{\"suggestions\":[]}";
+        if(u.getPath().endsWith("/suggest")) {
+            JSONArray hints=new JSONArray();
+            if("联想".equals(Uri.parse(u.toString()).getQueryParameter("text")))
+                hints.put(new JSONObject().put("text","联想终点").put("magicKey","qa-choice"));
+            return new JSONObject().put("suggestions",hints).toString();
+        }
         String name=Uri.parse(u.toString()).getQueryParameter("SingleLine");
         JSONArray rows=new JSONArray();
         if("候选".equals(name)) {
             rows.put(place("候选甲",31.21,121.40)).put(place("候选乙",31.22,121.42));
         } else if("起点 & A".equals(name)) rows.put(place(name,31.20,121.41));
-        else if("终点".equals(name)) rows.put(place(name,31.23,121.43));
+        else if("终点".equals(name) || "联想终点".equals(name)) rows.put(place("终点",31.23,121.43));
         return new JSONObject().put("candidates",rows).toString();
     }
     private void checkHandoff(String start,String end) {
